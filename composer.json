@@ -1,0 +1,50 @@
+{
+  "name": "lucianoqueiroz/event-store-cakephp-orm-adapter",
+  "description": "CakePHP ORM Adapter for ProophEventStore",
+  "homepage": "http://github.com/lucianoqueiroz/evest-store-cakephp-orm-adapter",
+  "license": "BSD-3-Clause",
+  "authors": [
+    {
+      "name": "Luciano Queiroz",
+      "email": "luciiano.queiroz@gmail.com"
+    },
+    {
+      "name": "Rafael Queiroz",
+      "email": "rafaelfqf@gmail.com"
+    }
+  ],
+  "require": {
+    "php": "~5.5|~7.0",
+    "prooph/event-store": "^6.3",
+    "doctrine/dbal": "^2.5",
+    "beberlei/assert": "^2.3",
+    "prooph/common": "^3.7",
+    "cakephp/orm": "^3.4"
+  },
+  "require-dev": {
+    "container-interop/container-interop": "^1.1",
+    "sandrokeil/interop-config": "^1.0",
+    "phpunit/phpunit": "^4.8",
+    "sebastian/comparator": "^1.2",
+    "fabpot/php-cs-fixer": "1.7.*",
+    "satooshi/php-coveralls": "^1.0"
+  },
+  "suggest": {
+    "container-interop/container-interop": "For usage of provided factories",
+    "sandrokeil/interop-config": "For usage of provided factories"
+  },
+  "conflict": {
+    "sandrokeil/interop-config": "<1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Prooph\\EventStore\\Adapter\\CakePHP\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "ProophTest\\EventStore\\Adapter\\CakePHP\\": "tests/",
+      "ProophTest\\EventStore\\": "vendor/prooph/event-store/tests/"
+    }
+  }
+}
