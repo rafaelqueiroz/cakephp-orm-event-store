@@ -30,6 +30,17 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
         );
     }
 
+    /**
+     * @test
+     */
+    public function it_can_return_sql_string_for_schema_creation()
+    {
+        return false;
+    }
+
+    /**
+     *
+     */
     public function test_it_exists()
     {
         $this->assertInstanceOf(CakePhpOrmEventStoreAdapter::class, $this->adapter);
