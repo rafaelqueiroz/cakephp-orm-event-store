@@ -8,6 +8,7 @@ use Prooph\Common\Messaging\FQCNMessageFactory;
 use Prooph\Common\Messaging\NoOpMessageConverter;
 use Prooph\EventStore\Adapter\CakePHP\CakePhpOrmEventStoreAdapter;
 use Prooph\EventStore\Adapter\PayloadSerializer\JsonPayloadSerializer;
+use Prooph\EventStore\Stream\StreamName;
 
 class CakePhpOrmEventStoreAdapterTest extends TestCase
 {
@@ -35,7 +36,10 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
      */
     public function it_can_return_sql_string_for_schema_creation()
     {
-        return false;
+        $sqls = $this->adapter->createSchemaFor(new StreamName('CakePHP\Model\User'), [], true);
+        $this->assertInternalType('array', $sqls);
+        $this->assertArrayHasKey(0, $sqls);
+        $this->assertInternalType('string', $sqls[0]);
     }
 
     /**
@@ -51,7 +55,7 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
      */
     public function it_injected_correct_db_connection()
     {
-        $connectionMock = $this->getMockForAbstractClass('Cake\Datasource\ConnectionInterface', [], '', false);
+        $connectionMock = $this->getMockForAbstractClass('Cake\Database\Connection', [], '', false);
         $adapter = new CakePhpOrmEventStoreAdapter(
             $connectionMock,
             new FQCNMessageFactory(),
