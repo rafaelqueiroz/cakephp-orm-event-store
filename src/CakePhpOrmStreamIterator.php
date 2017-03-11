@@ -165,7 +165,7 @@ final class CakePhpOrmStreamIterator implements Iterator
         }
         $return = [];
         foreach ($item as $key => $value) {
-            $arrKey = explode('user_stream__', $key);
+            $arrKey = explode($this->queryBuilder->repository()->table() . '__', $key);
             $return[end($arrKey)] = $value;
         }
         return $return;
