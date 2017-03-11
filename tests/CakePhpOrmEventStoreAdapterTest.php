@@ -9,6 +9,7 @@ use Prooph\Common\Messaging\NoOpMessageConverter;
 use Prooph\EventStore\Adapter\CakePHP\CakePhpOrmEventStoreAdapter;
 use Prooph\EventStore\Adapter\PayloadSerializer\JsonPayloadSerializer;
 use Prooph\EventStore\Stream\StreamName;
+use ProophTest\EventStore\Adapter\CakePHP\Mock\UsernameWasChanged;
 use ProophTest\EventStore\Adapter\CakePHP\Mock\UserWasCreated;
 use Prooph\EventStore\Stream\Stream;
 
@@ -61,6 +62,52 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
         $this->assertEquals('luciiano.queiroz@gmail.com', $event->payload()['email']);
         $this->assertEquals(1, $event->version());
         $this->assertEquals(['tag' => 'person'], $event->metadata());
+    }
+
+    /**
+     * @test
+     */
+    public function it_appends_events_to_a_stream()
+    {
+        $this->adapter->create($this->getTestStream());
+
+        $streamEvent = UsernameWasChanged::with(
+            ['name' => 'John Doe'],
+            2
+        );
+
+        $streamEvent = $streamEvent->withAddedMetadata('tag', 'person');
+
+        $stream = $this->adapter->load(new StreamName('CakePHP\Model\User'));
+        $messageConverter = new NoOpMessageConverter();
+
+        $this->adapter->appendTo(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent]));
+        $stream = $this->adapter->load(new StreamName('CakePHP\Model\User'));
+        $messageConverter = new NoOpMessageConverter();
+
+        $stream = $this->adapter->load(new StreamName('CakePHP\Model\User'));
+        $messageConverter = new NoOpMessageConverter();
+        foreach ($stream->streamEvents() as $event) {
+            //var_dump($messageConverter->convertToArray($event));
+        }
+        die;
+        $this->assertEquals('CakePHP\Model\User', $stream->streamName()->toString());
+
+        $count = 0;
+        $lastEvent = null;
+        foreach ($stream->streamEvents() as $event) {
+            $count++;
+            $lastEvent = $event;
+        }
+
+        $this->assertEquals(2, $count);
+        $this->assertInstanceOf(UsernameWasChanged::class, $lastEvent);
+        $messageConverter = new NoOpMessageConverter();
+
+        $streamEventData = $messageConverter->convertToArray($streamEvent);
+        $lastEventData = $messageConverter->convertToArray($lastEvent);
+
+        $this->assertEquals($streamEventData, $lastEventData);
     }
 
     /**
