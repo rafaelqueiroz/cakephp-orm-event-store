@@ -12,7 +12,7 @@ use Prooph\EventStore\Stream\StreamName;
 use ProophTest\EventStore\Adapter\CakePHP\Mock\UsernameWasChanged;
 use ProophTest\EventStore\Adapter\CakePHP\Mock\UserWasCreated;
 use Prooph\EventStore\Stream\Stream;
-use Prooph\EventStore\Exception\ConcurrencyException;
+use Prooph\EventStore\Exception\RuntimeException;
 
 class CakePhpOrmEventStoreAdapterTest extends TestCase
 {
@@ -150,7 +150,7 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
     /**
      * @test
      */
-    public function it_can_rewind_cakephp_stream_iterator()
+    public function it_can_rewind_cakephp_orm_stream_iterator()
     {
         $testStream = $this->getTestStream();
 
@@ -189,7 +189,7 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
         $streamEvent = $streamEvent->withAddedMetadata('aggregate_id', 'one');
         $streamEvent = $streamEvent->withAddedMetadata('aggregate_type', 'user');
 
-        $this->adapter->create(new Stream(new StreamName('Prooph\Model\User'), new \ArrayIterator([$streamEvent])));
+        $this->adapter->create(new Stream(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent])));
 
         $streamEvent = UsernameWasChanged::with(
             ['name' => 'John Doe'],
@@ -199,7 +199,7 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
         $streamEvent = $streamEvent->withAddedMetadata('aggregate_id', 'one');
         $streamEvent = $streamEvent->withAddedMetadata('aggregate_type', 'user');
 
-        $this->adapter->appendTo(new StreamName('Prooph\Model\User'), new \ArrayIterator([$streamEvent]));
+        $this->adapter->appendTo(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent]));
     }
 
     /**
@@ -207,7 +207,7 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
      */
     public function it_replays_larger_streams_in_chunks()
     {
-        $streamName = new StreamName('Prooph\Model\User');
+        $streamName = new StreamName('CakePHP\Model\User');
 
         $streamEvents = [];
 
@@ -265,5 +265,212 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
         $this->assertEquals(0, $result->key());
         $result->next();
         $this->assertNull($result->current());
+    }
+
+    /**
+     * @test
+     * @expectedException RuntimeException
+     * @expectedExceptionMessage Cannot create empty stream CakePHP\Model\User.
+     */
+    public function it_throws_exception_when_empty_stream_created()
+    {
+        $this->adapter->create(new Stream(new StreamName('CakePHP\Model\User'), new \ArrayIterator([])));
+    }
+
+    /**
+     * @test
+     * @expectedException RuntimeException
+     * @expectedExceptionMessage Transaction already started
+     */
+    public function it_throws_exception_when_second_transaction_started()
+    {
+        $this->adapter->beginTransaction();
+        $this->adapter->beginTransaction();
+    }
+
+    /**
+     * @test
+     */
+    public function it_replays_events_of_two_aggregates_in_a_single_stream_in_correct_order()
+    {
+        $testStream = $this->getTestStream();
+
+        $this->adapter->beginTransaction();
+
+        $this->adapter->create($testStream);
+
+        $this->adapter->commit();
+
+        $streamEvent = UsernameWasChanged::with(
+            ['name' => 'John Doe'],
+            2
+        );
+
+        $streamEvent = $streamEvent->withAddedMetadata('tag', 'person');
+
+        $this->adapter->appendTo(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent]));
+
+        sleep(1);
+
+        $secondUserEvent = UserWasCreated::with(
+            ['name' => 'Jane Doe', 'email' => 'jane@acme.com'],
+            1
+        );
+
+        $secondUserEvent = $secondUserEvent->withAddedMetadata('tag', 'person');
+
+        $this->adapter->appendTo(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$secondUserEvent]));
+
+        $streamEvents = $this->adapter->replay(new StreamName('CakePHP\Model\User'), null, ['tag' => 'person']);
+
+
+        $replayedPayloads = [];
+        foreach ($streamEvents as $event) {
+            $replayedPayloads[] = $event->payload();
+        }
+
+        $expectedPayloads = [
+            ['name' => 'Luciano Queiroz', 'email' => 'luciiano.queiroz@gmail.com'],
+            ['name' => 'John Doe'],
+            ['name' => 'Jane Doe', 'email' => 'jane@acme.com'],
+        ];
+
+        $this->assertEquals($expectedPayloads, $replayedPayloads);
+    }
+
+    /**
+     * @test
+     */
+    public function it_replays_from_specific_date()
+    {
+        $testStream = $this->getTestStream();
+
+        $this->adapter->beginTransaction();
+
+        $this->adapter->create($testStream);
+
+        $this->adapter->commit();
+
+        sleep(1);
+
+        $since = new \DateTime('now', new \DateTimeZone('UTC'));
+
+        $streamEvent = UsernameWasChanged::with(
+            ['name' => 'John Doe'],
+            2
+        );
+
+        $streamEvent = $streamEvent->withAddedMetadata('tag', 'person');
+
+        $this->adapter->appendTo(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent]));
+
+        $streamEvents = $this->adapter->replay(new StreamName('CakePHP\Model\User'), $since, ['tag' => 'person']);
+
+        $count = 0;
+        foreach ($streamEvents as $event) {
+            $count++;
+        }
+        $this->assertEquals(1, $count);
+
+        $testStream->streamEvents()->rewind();
+        $streamEvents->rewind();
+
+        $event = $streamEvents->current();
+
+        $this->assertEquals($streamEvent->uuid()->toString(), $event->uuid()->toString());
+        $this->assertEquals($streamEvent->createdAt()->format('Y-m-d\TH:i:s.uO'), $event->createdAt()->format('Y-m-d\TH:i:s.uO'));
+        $this->assertEquals('ProophTest\EventStore\Adapter\CakePHP\Mock\UsernameWasChanged', $event->messageName());
+        $this->assertEquals('John Doe', $event->payload()['name']);
+        $this->assertEquals(2, $event->version());
+    }
+
+    /**
+     * @test
+     */
+    public function it_replays()
+    {
+        $testStream = $this->getTestStream();
+
+        $this->adapter->beginTransaction();
+
+        $this->adapter->create($testStream);
+
+        $this->adapter->commit();
+
+        $streamEvent = UsernameWasChanged::with(
+            ['name' => 'John Doe'],
+            2
+        );
+
+        $streamEvent = $streamEvent->withAddedMetadata('tag', 'person');
+
+        $this->adapter->appendTo(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent]));
+
+        $streamEvents = $this->adapter->replay(new StreamName('CakePHP\Model\User'), null, ['tag' => 'person']);
+
+        $count = 0;
+        foreach ($streamEvents as $event) {
+            $count++;
+        }
+        $this->assertEquals(2, $count);
+
+        $testStream->streamEvents()->rewind();
+        $streamEvents->rewind();
+
+        $testEvent = $testStream->streamEvents()->current();
+        $event = $streamEvents->current();
+
+        $this->assertEquals($testEvent->uuid()->toString(), $event->uuid()->toString());
+        $this->assertEquals($testEvent->createdAt()->format('Y-m-d\TH:i:s.uO'), $event->createdAt()->format('Y-m-d\TH:i:s.uO'));
+        $this->assertEquals('ProophTest\EventStore\Adapter\CakePHP\Mock\UserWasCreated', $event->messageName());
+        $this->assertEquals('luciiano.queiroz@gmail.com', $event->payload()['email']);
+        $this->assertEquals(1, $event->version());
+
+        $streamEvents->next();
+        $event = $streamEvents->current();
+
+        $this->assertEquals($streamEvent->uuid()->toString(), $event->uuid()->toString());
+        $this->assertEquals($streamEvent->createdAt()->format('Y-m-d\TH:i:s.uO'), $event->createdAt()->format('Y-m-d\TH:i:s.uO'));
+        $this->assertEquals('ProophTest\EventStore\Adapter\CakePHP\Mock\UsernameWasChanged', $event->messageName());
+        $this->assertEquals('John Doe', $event->payload()['name']);
+        $this->assertEquals(2, $event->version());
+    }
+
+    /**
+     * @test
+     */
+    public function it_loads_events_from_min_version_on()
+    {
+        $this->adapter->create($this->getTestStream());
+
+        $streamEvent1 = UsernameWasChanged::with(
+            ['name' => 'John Doe'],
+            2
+        );
+
+        $streamEvent1 = $streamEvent1->withAddedMetadata('tag', 'person');
+
+
+        $streamEvent2 = UsernameWasChanged::with(
+            ['name' => 'Jane Doe'],
+            3
+        );
+
+        $streamEvent2 = $streamEvent2->withAddedMetadata('tag', 'person');
+
+        $this->adapter->appendTo(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent1, $streamEvent2]));
+
+        $stream = $this->adapter->load(new StreamName('CakePHP\Model\User'), 2);
+
+        $this->assertEquals('CakePHP\Model\User', $stream->streamName()->toString());
+
+        $event1 = $stream->streamEvents()->current();
+        $stream->streamEvents()->next();
+        $event2 = $stream->streamEvents()->current();
+        $stream->streamEvents()->next();
+        $this->assertFalse($stream->streamEvents()->valid());
+
+        $this->assertEquals('John Doe', $event1->payload()['name']);
+        $this->assertEquals('Jane Doe', $event2->payload()['name']);
     }
 }

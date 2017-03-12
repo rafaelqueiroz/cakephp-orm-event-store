@@ -260,7 +260,7 @@ class CakePhpOrmEventStoreAdapter implements Adapter
      * @param array $metadata
      * @return CakePhpOrmStreamIterator
      */
-    public function replay(StreamName $streamName, DateTimeInterface $since = null, array $metadata = [])
+    public function replay(StreamName $streamName, \DateTimeInterface $since = null, array $metadata = [])
     {
         $queryBuilder = $this->createQueryBuilder($streamName, $metadata);
         $table = $this->getTable($streamName);
