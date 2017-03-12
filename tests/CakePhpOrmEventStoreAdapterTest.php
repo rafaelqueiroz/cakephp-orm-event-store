@@ -12,6 +12,7 @@ use Prooph\EventStore\Stream\StreamName;
 use ProophTest\EventStore\Adapter\CakePHP\Mock\UsernameWasChanged;
 use ProophTest\EventStore\Adapter\CakePHP\Mock\UserWasCreated;
 use Prooph\EventStore\Stream\Stream;
+use Prooph\EventStore\Exception\ConcurrencyException;
 
 class CakePhpOrmEventStoreAdapterTest extends TestCase
 {
@@ -172,5 +173,63 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
         $result->next();
         $this->assertNull($result->current());
         $this->assertFalse($result->key());
+    }
+
+    /**
+     * @test
+     * @expectedException \PDOException
+     */
+    public function it_fails_to_write_with_duplicate_aggregate_id_and_version()
+    {
+        $streamEvent = UserWasCreated::with(
+            ['name' => 'Luciano Queiroz', 'email' => 'luciiano.queiroz@gmail.com'],
+            1
+        );
+
+        $streamEvent = $streamEvent->withAddedMetadata('aggregate_id', 'one');
+        $streamEvent = $streamEvent->withAddedMetadata('aggregate_type', 'user');
+
+        $this->adapter->create(new Stream(new StreamName('Prooph\Model\User'), new \ArrayIterator([$streamEvent])));
+
+        $streamEvent = UsernameWasChanged::with(
+            ['name' => 'John Doe'],
+            1
+        );
+
+        $streamEvent = $streamEvent->withAddedMetadata('aggregate_id', 'one');
+        $streamEvent = $streamEvent->withAddedMetadata('aggregate_type', 'user');
+
+        $this->adapter->appendTo(new StreamName('Prooph\Model\User'), new \ArrayIterator([$streamEvent]));
+    }
+
+    /**
+     * @test
+     */
+    public function it_replays_larger_streams_in_chunks()
+    {
+        $streamName = new StreamName('Prooph\Model\User');
+
+        $streamEvents = [];
+
+        for ($i = 1; $i <= 150; $i++) {
+            $streamEvents[] = UserWasCreated::with(
+                ['name' => 'Luciano Queiroz ' . $i, 'email' => 'luciiano.queiroz_' . $i . '@gmail.com'],
+                $i
+            );
+        }
+
+        $this->adapter->create(new Stream($streamName, new \ArrayIterator($streamEvents)));
+
+        $replay = $this->adapter->replay($streamName);
+
+        $count = 0;
+        foreach ($replay as $event) {
+            $count++;
+            $this->assertEquals('Luciano Queiroz ' . $count, $event->payload()['name']);
+            $this->assertEquals('luciiano.queiroz_' . $count . '@gmail.com', $event->payload()['email']);
+            $this->assertEquals($count, $event->version());
+        }
+
+        $this->assertEquals(150, $count);
     }
 }
