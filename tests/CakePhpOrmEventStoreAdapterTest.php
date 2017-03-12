@@ -232,4 +232,38 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
 
         $this->assertEquals(150, $count);
     }
+
+    /**
+     * @test
+     */
+    public function it_can_rollback_transaction()
+    {
+        $testStream = $this->getTestStream();
+
+        $this->adapter->beginTransaction();
+
+        $this->adapter->create($testStream);
+
+        $this->adapter->commit();
+
+        $this->adapter->beginTransaction();
+
+        $streamEvent = UserWasCreated::with(
+            ['name' => 'Luciano Queiroz', 'email' => 'luciiano.queiroz@gmail.com'],
+            1
+        );
+
+        $streamEvent = $streamEvent->withAddedMetadata('tag', 'person');
+
+        $this->adapter->appendTo(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent]));
+
+        $this->adapter->rollback();
+
+        $result = $this->adapter->loadEvents(new StreamName('CakePHP\Model\User'), ['tag' => 'person']);
+
+        $this->assertNotNull($result->current());
+        $this->assertEquals(0, $result->key());
+        $result->next();
+        $this->assertNull($result->current());
+    }
 }
