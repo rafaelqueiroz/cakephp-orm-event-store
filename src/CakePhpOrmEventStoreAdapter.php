@@ -148,6 +148,9 @@ class CakePhpOrmEventStoreAdapter implements Adapter
         return implode('', array_slice(explode('\\', $streamName), -1));
     }
 
+    /**
+     *
+     */
     public function beginTransaction()
     {
         if ($this->connection->inTransaction()) {
@@ -156,11 +159,20 @@ class CakePhpOrmEventStoreAdapter implements Adapter
         $this->connection->begin();
     }
 
+    /**
+     * @throws null
+     */
     public function commit()
     {
         $this->connection->commit();
     }
 
+    /**
+     * @param StreamName $streamName
+     * @param null $minVersion
+     * @param array $metadata
+     * @return Stream
+     */
     public function load(StreamName $streamName, $minVersion = null, $metadata = [])
     {
         $events = $this->loadEvents($streamName, $metadata, $minVersion);
@@ -168,6 +180,10 @@ class CakePhpOrmEventStoreAdapter implements Adapter
         return new Stream($streamName, $events);
     }
 
+    /**
+     * @param Stream $stream
+     * @throws ConcurrencyException
+     */
     public function create(Stream $stream)
     {
         if (!$stream->streamEvents()->valid()) {
@@ -186,6 +202,11 @@ class CakePhpOrmEventStoreAdapter implements Adapter
         $this->appendTo($stream->streamName(), $stream->streamEvents());
     }
 
+    /**
+     * @param StreamName $streamName
+     * @param Iterator $streamEvents
+     * @throws ConcurrencyException
+     */
     public function appendTo(StreamName $streamName, Iterator $streamEvents)
     {
         try {
@@ -225,27 +246,46 @@ class CakePhpOrmEventStoreAdapter implements Adapter
         $this->connection->insert($this->getTable($streamName), $eventData);
     }
 
+    /**
+     * @param StreamName $streamName
+     * @param DateTimeInterface|null $since
+     * @param array $metadata
+     * @return CakePhpOrmStreamIterator
+     */
     public function replay(StreamName $streamName, DateTimeInterface $since = null, array $metadata = [])
     {
-        // TODO: Implement replay() method.
+        $queryBuilder = $this->createQueryBuilder($streamName, $metadata);
+        $table = $this->getTable($streamName);
+
+        $queryBuilder
+            ->select()
+            ->from($table)
+            ->orderAsc('created_at')
+            ->orderAsc('version');
+
+        foreach ($metadata as $key => $value) {
+            $queryBuilder->andWhere([
+                $table . '.' . $key => (string)$value
+            ]);
+        }
+
+        if (null !== $since) {
+            $queryBuilder->andWhere(['created_at >' => $since->format('Y-m-d\TH:i:s.u')]);
+        }
+
+        return new CakePhpOrmStreamIterator(
+            $queryBuilder,
+            $this->messageFactory,
+            $this->payloadSerializer,
+            $metadata,
+            $this->loadBatchSize
+        );
     }
 
     public function loadEvents(StreamName $streamName, array $metadata = [], $minVersion = null)
     {
+        $queryBuilder = $this->createQueryBuilder($streamName, $metadata);
         $table = $this->getTable($streamName);
-        $tableSchema = new TableSchema($table);
-        static::addToTableSchema($tableSchema, $metadata);
-        $queryBuilder = new Query(
-            $this->connection,
-            new Table(
-                [
-                    'alias' => null,
-                    'table' => $table,
-                    'schema' => $tableSchema,
-                    'connection' => $this->connection
-                ]
-            )
-        );
         $queryBuilder
             ->select()
             ->from($table)
@@ -268,5 +308,28 @@ class CakePhpOrmEventStoreAdapter implements Adapter
             $this->loadBatchSize
         );
 
+    }
+
+    /**
+     * @param StreamName $streamName
+     * @param $metadata
+     * @return Query
+     */
+    private function createQueryBuilder(StreamName $streamName, $metadata)
+    {
+        $table = $this->getTable($streamName);
+        $tableSchema = new TableSchema($table);
+        static::addToTableSchema($tableSchema, $metadata);
+        return new Query(
+            $this->connection,
+            new Table(
+                [
+                    'alias' => null,
+                    'table' => $table,
+                    'schema' => $tableSchema,
+                    'connection' => $this->connection
+                ]
+            )
+        );
     }
 }
