@@ -9,6 +9,7 @@ use Prooph\Common\Messaging\NoOpMessageConverter;
 use Prooph\EventStore\Adapter\CakePHP\CakePhpOrmEventStoreAdapter;
 use Prooph\EventStore\Adapter\PayloadSerializer\JsonPayloadSerializer;
 use Prooph\EventStore\Stream\StreamName;
+use ProophTest\EventStore\Adapter\CakePHP\Mock\UsernameWasChanged;
 use ProophTest\EventStore\Adapter\CakePHP\Mock\UserWasCreated;
 use Prooph\EventStore\Stream\Stream;
 
@@ -66,6 +67,41 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
     /**
      * @test
      */
+    public function it_appends_events_to_a_stream()
+    {
+        $this->adapter->create($this->getTestStream());
+
+        $streamEvent = UsernameWasChanged::with(
+            ['name' => 'John Doe'],
+            2
+        );
+
+        $streamEvent = $streamEvent->withAddedMetadata('tag', 'person');
+
+        $this->adapter->appendTo(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent]));
+        $stream = $this->adapter->load(new StreamName('CakePHP\Model\User'), null, $streamEvent->metadata());
+
+        $this->assertEquals('CakePHP\Model\User', $stream->streamName()->toString());
+
+        $count = 0;
+        $lastEvent = null;
+        foreach ($stream->streamEvents() as $event) {
+            $count++;
+            $lastEvent = $event;
+        }
+
+        $this->assertEquals(2, $count);
+        $this->assertInstanceOf(UsernameWasChanged::class, $lastEvent);
+        $messageConverter = new NoOpMessageConverter();
+
+        $streamEventData = $messageConverter->convertToArray($streamEvent);
+        $lastEventData = $messageConverter->convertToArray($lastEvent);
+        $this->assertEquals($streamEventData, $lastEventData);
+    }
+
+    /**
+     * @test
+     */
     public function it_can_return_sql_string_for_schema_creation()
     {
         $sqls = $this->adapter->createSchemaFor(new StreamName('CakePHP\Model\User'), [], true);
@@ -75,7 +111,7 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
     }
 
     /**
-     *
+     * @test
      */
     public function test_it_exists()
     {
@@ -108,5 +144,33 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
         );
         $streamEvent = $streamEvent->withAddedMetadata('tag', 'person');
         return new Stream(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent]));
+    }
+
+    /**
+     * @test
+     */
+    public function it_can_rewind_cakephp_stream_iterator()
+    {
+        $testStream = $this->getTestStream();
+
+        $this->adapter->beginTransaction();
+
+        $this->adapter->create($testStream);
+
+        $this->adapter->commit();
+
+        $result = $this->adapter->loadEvents(new StreamName('CakePHP\Model\User'), ['tag' => 'person']);
+
+        $this->assertNotNull($result->current());
+        $this->assertEquals(0, $result->key());
+        $result->next();
+        $this->assertNull($result->current());
+
+        $result->rewind();
+        $this->assertNotNull($result->current());
+        $this->assertEquals(0, $result->key());
+        $result->next();
+        $this->assertNull($result->current());
+        $this->assertFalse($result->key());
     }
 }

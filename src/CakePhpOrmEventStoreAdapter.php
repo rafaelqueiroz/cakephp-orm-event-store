@@ -16,7 +16,6 @@ use Prooph\EventStore\Adapter\PayloadSerializer\JsonPayloadSerializer;
 use Iterator;
 use Prooph\Common\Messaging\MessageDataAssertion;
 use Prooph\Common\Messaging\Message;
-use Prooph\EventStore\Adapter\CakePHP\CakePhpOrmStreamIterator;
 
 class CakePhpOrmEventStoreAdapter implements Adapter
 {
@@ -162,9 +161,11 @@ class CakePhpOrmEventStoreAdapter implements Adapter
         $this->connection->commit();
     }
 
-    public function load(StreamName $streamName, $minVersion = null)
+    public function load(StreamName $streamName, $minVersion = null, $metadata = [])
     {
-        // TODO: Implement load() method.
+        $events = $this->loadEvents($streamName, $metadata, $minVersion);
+
+        return new Stream($streamName, $events);
     }
 
     public function create(Stream $stream)
@@ -249,19 +250,16 @@ class CakePhpOrmEventStoreAdapter implements Adapter
             ->select()
             ->from($table)
             ->orderAsc($table.'.version');
-
         foreach ($metadata as $key => $value) {
             $queryBuilder->andWhere([
-                $table.'.'.$key => (string)$value
+                $table . '.' . $key => (string)$value
             ]);
         }
-
         if (null !== $minVersion) {
             $queryBuilder->andWhere([
-                'version >=' => $minVersion
+                $table . '.version >=' => $minVersion
             ]);
         }
-
         return new CakePhpOrmStreamIterator(
             $queryBuilder,
             $this->messageFactory,
