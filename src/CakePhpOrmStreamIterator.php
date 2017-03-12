@@ -49,6 +49,7 @@ final class CakePhpOrmStreamIterator implements Iterator
      */
     private $batchPosition = 0;
     private $batchSize;
+
     /**
      * @param Query $queryBuilder
      * @param MessageFactory $messageFactory
@@ -108,15 +109,15 @@ final class CakePhpOrmStreamIterator implements Iterator
     public function next()
     {
         $this->currentItem = $this->stripCakePhpOrmAlias($this->statement->fetch(\PDO::FETCH_ASSOC));
+
         if (false !== $this->currentItem) {
             $this->currentKey++;
         } else {
             $this->batchPosition++;
-            $this->queryBuilder->offset($this->batchPosition - 1);
-            $this->queryBuilder->limit($this->batchSize * $this->batchPosition);
+            $this->queryBuilder->offset($this->batchSize * $this->batchPosition);
+            $this->queryBuilder->limit($this->batchSize);
             $this->statement = $this->queryBuilder->execute();
             $this->currentItem = $this->stripCakePhpOrmAlias($this->statement->fetch(\PDO::FETCH_ASSOC));
-
             if (false === $this->currentItem) {
                 $this->currentKey = -1;
             }
@@ -149,8 +150,8 @@ final class CakePhpOrmStreamIterator implements Iterator
             $this->batchPosition = 0;
             $this->queryBuilder->offset(0);
             $this->queryBuilder->limit($this->batchSize);
+
             $stmt = $this->queryBuilder->execute();
-            $stmt->fetch(\PDO::FETCH_ASSOC);
             $this->currentItem = null;
             $this->currentKey = -1;
             $this->statement = $stmt;
@@ -165,8 +166,10 @@ final class CakePhpOrmStreamIterator implements Iterator
         }
         $return = [];
         foreach ($item as $key => $value) {
-            $arrKey = explode($this->queryBuilder->repository()->table() . '__', $key);
-            $return[end($arrKey)] = $value;
+            if ((strpos($key, $this->queryBuilder->repository()->table() . '__') + 1) >= 1) {
+                $arrKey = explode($this->queryBuilder->repository()->table() . '__', $key);
+                $return[end($arrKey)] = $value;
+            }
         }
         return $return;
     }

@@ -78,19 +78,9 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
 
         $streamEvent = $streamEvent->withAddedMetadata('tag', 'person');
 
-        $stream = $this->adapter->load(new StreamName('CakePHP\Model\User'));
-        $messageConverter = new NoOpMessageConverter();
-
         $this->adapter->appendTo(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent]));
-        $stream = $this->adapter->load(new StreamName('CakePHP\Model\User'));
-        $messageConverter = new NoOpMessageConverter();
+        $stream = $this->adapter->load(new StreamName('CakePHP\Model\User'), null, $streamEvent->metadata());
 
-        $stream = $this->adapter->load(new StreamName('CakePHP\Model\User'));
-        $messageConverter = new NoOpMessageConverter();
-        foreach ($stream->streamEvents() as $event) {
-            //var_dump($messageConverter->convertToArray($event));
-        }
-        die;
         $this->assertEquals('CakePHP\Model\User', $stream->streamName()->toString());
 
         $count = 0;
@@ -106,7 +96,6 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
 
         $streamEventData = $messageConverter->convertToArray($streamEvent);
         $lastEventData = $messageConverter->convertToArray($lastEvent);
-
         $this->assertEquals($streamEventData, $lastEventData);
     }
 
@@ -122,7 +111,7 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
     }
 
     /**
-     *
+     * @test
      */
     public function test_it_exists()
     {
@@ -155,5 +144,33 @@ class CakePhpOrmEventStoreAdapterTest extends TestCase
         );
         $streamEvent = $streamEvent->withAddedMetadata('tag', 'person');
         return new Stream(new StreamName('CakePHP\Model\User'), new \ArrayIterator([$streamEvent]));
+    }
+
+    /**
+     * @test
+     */
+    public function it_can_rewind_cakephp_stream_iterator()
+    {
+        $testStream = $this->getTestStream();
+
+        $this->adapter->beginTransaction();
+
+        $this->adapter->create($testStream);
+
+        $this->adapter->commit();
+
+        $result = $this->adapter->loadEvents(new StreamName('CakePHP\Model\User'), ['tag' => 'person']);
+
+        $this->assertNotNull($result->current());
+        $this->assertEquals(0, $result->key());
+        $result->next();
+        $this->assertNull($result->current());
+
+        $result->rewind();
+        $this->assertNotNull($result->current());
+        $this->assertEquals(0, $result->key());
+        $result->next();
+        $this->assertNull($result->current());
+        $this->assertFalse($result->key());
     }
 }
