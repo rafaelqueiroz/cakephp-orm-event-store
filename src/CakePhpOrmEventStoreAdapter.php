@@ -168,6 +168,14 @@ class CakePhpOrmEventStoreAdapter implements Adapter
     }
 
     /**
+     *
+     */
+    public function rollback()
+    {
+        $this->connection->rollback();
+    }
+
+    /**
      * @param StreamName $streamName
      * @param null $minVersion
      * @param array $metadata
@@ -270,7 +278,9 @@ class CakePhpOrmEventStoreAdapter implements Adapter
         }
 
         if (null !== $since) {
-            $queryBuilder->andWhere(['created_at >' => $since->format('Y-m-d\TH:i:s.u')]);
+            $queryBuilder->andWhere([
+                'created_at >' => $since->format('Y-m-d\TH:i:s.u')
+            ]);
         }
 
         return new CakePhpOrmStreamIterator(
@@ -282,6 +292,12 @@ class CakePhpOrmEventStoreAdapter implements Adapter
         );
     }
 
+    /**
+     * @param StreamName $streamName
+     * @param array $metadata
+     * @param null $minVersion
+     * @return CakePhpOrmStreamIterator
+     */
     public function loadEvents(StreamName $streamName, array $metadata = [], $minVersion = null)
     {
         $queryBuilder = $this->createQueryBuilder($streamName, $metadata);
