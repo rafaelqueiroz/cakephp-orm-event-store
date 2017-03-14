@@ -1,4 +1,4 @@
-# event-store-cakephp-orm-adapter
+# cakephp-orm-event-store
 CakePHP ORM EventStore implementation for Prooph EventStore http://getprooph.org
 
 # installation
