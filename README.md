@@ -1,7 +1,5 @@
 # event-store-cakephp-orm-adapter
-CakePHP ORM Adapter for ProophEventStore http://getprooph.org
-
-This adapter was totally inspired by https://github.com/prooph/event-store-doctrine-adapter.
+CakePHP ORM EventStore implementation for Prooph EventStore http://getprooph.org
 
 # installation
-composer require lucianoqueiroz/event-store-cakephp-orm-adapter
+composer require lucianoqueiroz/cakephp-orm-event-store
